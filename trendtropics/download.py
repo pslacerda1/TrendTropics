@@ -1,10 +1,14 @@
 from dataclasses import dataclass, field
 from hashlib import sha256
+from logging import getLogger
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import requests_cache
 from requests import Session
 import lxml.html
+
+
+logger = getLogger(__name__)
 
 
 requests_cache.install_cache(
@@ -47,7 +51,9 @@ def extract_paper_from_url(session: Session, url: str) -> Paper:
 
     try:
         doi: str = doc.xpath('//div[contains(@class, "doi")]//a/text()')[0].strip()
-        abstract: str = ' '.join(doc.xpath('//div[contains(@class, "abstract")]/text()')).strip()
+        abstract: str = ' '.join(doc.xpath('//div[contains(@class, "abstract")]')[0].itertext()).strip()
+        if abstract.startswith("Resumo"):
+            abstract = abstract[len("Resumo"):].strip()
         title: str = doc.xpath('//h1[@class="page_title"]/text()')[0].strip()
         pdf_url: str = doc.xpath('//a[@class="obj_galley_link pdf"]/@href')[0].strip()
     except Exception as exc:
@@ -55,7 +61,7 @@ def extract_paper_from_url(session: Session, url: str) -> Paper:
             f"Failed to extract DOI and abstract from the paper at {url}."
         ) from exc
     
-    try:    
+    try:
         resp = session.get(pdf_url)
         html_content = resp.content.decode()
         doc = lxml.html.fromstring(html_content)
@@ -79,3 +85,55 @@ def extract_paper_from_url(session: Session, url: str) -> Paper:
         ) from exc
 
     return Paper(doi_url=doi, title=title, abstract=abstract, pdf_path=pdf_path)
+
+
+def extract_acta_from_url(
+    session: Session,
+    url: str,
+    max_papers: int | None = None
+) -> list[Paper]:
+    """
+    Extract all papers from an acta URL.
+
+    Args:
+        session: The session to use for the request.
+        url: The URL of the acta.
+    """
+    try:
+        resp = session.get(url)
+        html_content = resp.content.decode()
+        doc = lxml.html.fromstring(html_content)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to download and parse the HTML for the acta at {url}."
+        ) from exc
+
+    paper_ls = []
+    try:
+        paper_items = doc.xpath('//div[@class="obj_article_summary"]')
+        for pi in paper_items:
+            # Limita o número de artigos extraídos, se especificado.
+            if max_papers and max_papers == len(paper_ls):
+                break
+            
+            # Extrai o URL do artigo.
+            paper_url = pi.xpath('./div[@class="title"]/a/@href')[0].strip()
+
+            # Extrai texto do botão de download do PDF para verificar se é um artigo em português.
+            url_button_text = pi.cssselect('.obj_galley_link.pdf')[0].text.strip()
+            if 'PDF' != url_button_text:
+                # Ignora artigos em outros idiomas.
+                continue
+            try:
+                paper = extract_paper_from_url(session, paper_url)
+                paper_ls.append(paper)
+            except Exception as exc:
+                logger.exception("Failed to extract paper.", exc_info=exc)
+                continue
+            
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to extract paper URLs from the acta at {url}."
+        ) from exc
+
+    return paper_ls
