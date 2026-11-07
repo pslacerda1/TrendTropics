@@ -1,0 +1,6 @@
+__pycache__/
+.pytest_cache/
+.vscode/
+*.egg-info
+*.pyspy
+requests-cache.sqlite

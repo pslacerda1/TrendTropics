@@ -1,0 +1,16 @@
+[project]
+name = "TrendTropics"
+authors = [
+  {name = "Pedro Sousa Lacerda", email = "pslacerda@gmail.com"},
+]
+version = "2.0.0"
+description = """
+    Uma ferramenta para analisar tópicos em eventos de InfoEduc no Brasil.
+"""
+dependencies = [
+  "lxml>=6.1.3",
+  "requests>=2.34.2",
+  "requests-cache>=1.3.3",
+]
+[tool.setuptools]
+packages = ["trendtropics"]
