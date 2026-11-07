@@ -19,6 +19,8 @@ def test_extract_paper_from_url_0():
     assert paper.pdf_path.stem == sha256(doi_url.encode()).hexdigest()
     assert paper.pdf_path.read_bytes()[:4] == b"%PDF"
 
+    assert paper.cleaned_text.startswith("Ao mesmo tempo")
+    assert paper.cleaned_text.endswith("no link: https://anonymous.4open.\nscience/r/sti-calculo-sbie2026-0E2E/.")
 
 def test_extract_paper_from_url_1():
     doi_url = "https://doi.org/10.5753/sbie.2026.26702"

@@ -1,11 +1,17 @@
+import re
+import unicodedata
 from dataclasses import dataclass, field
+from functools import cached_property
 from hashlib import sha256
 from logging import getLogger
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs
+from textwrap import dedent
+from urllib.parse import parse_qs, urlparse
+
+import lxml.html
 import requests_cache
 from requests import Session
-import lxml.html
+import textract
 
 
 logger = getLogger(__name__)
@@ -24,12 +30,66 @@ DOWNLOADS_PATH = Path(__file__).parent.parent / "downloads"
 DOWNLOADS_PATH.mkdir(exist_ok=True, parents=True)
 
 
+RE_REFERENCES = re.compile(
+    r'(\n(\d+?\.?\s+)?(Referências|Referências Bibliográficas|Bibliografia))'
+)
+RE_REMOVE = [
+    r'XV Congresso Brasileiro de Informática na Educação \(CBIE 2026\)\n',
+    r'Anais do XXXVII Simpósio Brasileiro de Informática na Educação \(SBIE 2026\)\n',
+    r'DOI: 10.5753/sbie.2026.\d+'
+]
+
+
 @dataclass(frozen=True)
 class Paper:
+
     doi_url: str
     title: str
     abstract: str = field(repr=False)
     pdf_path: Path = field(repr=False)
+
+    @cached_property
+    def cleaned_text(self) -> str:
+        all_pages: list[str] = []
+        doc: str = textract.process(self.pdf_path).decode()
+        doc = unicodedata.normalize("NFC", doc)
+        refs_found = False
+        for ix, page in enumerate(doc.split("\n\n\x0c")):
+            
+            # Pula a primeira página.
+            if ix == 0:
+                continue
+
+            # Para a extração se já atingiu as referências.
+            if refs_found:
+                break
+            
+            # Extrai o texto da página e remove o cabeçalho e rodapé do congresso, se presente.
+            for regex in RE_REMOVE:
+                page = re.sub(regex, "", page)
+            page = page.strip()
+
+            # Detecta o início das referências e remove o texto a partir desse ponto.
+            # Para a extração se já atingiu as referências.
+            matches = list(RE_REFERENCES.finditer(page, re.IGNORECASE))
+            for match in reversed(matches):
+                refs_start = match.start()
+                break
+            else:
+                refs_start = -1
+
+            if refs_start != -1:
+                page = page[:refs_start]
+                refs_found = True
+                
+            # Salva a página.
+            page = page.strip()
+            all_pages.append(page)
+
+        if not refs_found:
+            raise Exception("Failed to detect references in the PDF.")
+
+        return "\n".join(all_pages)
 
 
 def extract_paper_from_url(session: Session, url: str) -> Paper:
