@@ -1,6 +1,6 @@
 from requests import Session
 from hashlib import sha256
-from trendtropics.download import Paper, extract_paper_from_url, extract_acta_from_url
+from trendtropics.scraper import Paper, extract_paper_from_url, extract_acta_from_url
 
 
 def test_extract_paper_from_url_0():
