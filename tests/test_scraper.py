@@ -1,11 +1,10 @@
-from requests import Session
 from hashlib import sha256
 from trendtropics.scraper import Paper, extract_paper_from_url, extract_acta_from_url
 
 
 def test_extract_paper_from_url_0():
     doi_url = "https://doi.org/10.5753/sbie.2026.28387"
-    paper = extract_paper_from_url(Session(), doi_url)
+    paper = extract_paper_from_url(doi_url)
     
     assert isinstance(paper, Paper)
     assert paper.doi_url == doi_url
@@ -19,12 +18,13 @@ def test_extract_paper_from_url_0():
     assert paper.pdf_path.stem == sha256(doi_url.encode()).hexdigest()
     assert paper.pdf_path.read_bytes()[:4] == b"%PDF"
 
-    assert paper.cleaned_text.startswith("Ao mesmo tempo")
-    assert paper.cleaned_text.endswith("no link: https://anonymous.4open.\nscience/r/sti-calculo-sbie2026-0E2E/.")
+    assert paper.get_text().startswith("Ao mesmo tempo")
+    assert paper.get_text().endswith("disciplinas de Cálculo.")
+
 
 def test_extract_paper_from_url_1():
     doi_url = "https://doi.org/10.5753/sbie.2026.26702"
-    paper = extract_paper_from_url(Session(), doi_url)
+    paper = extract_paper_from_url(doi_url)
     
     assert isinstance(paper, Paper)
     assert paper.doi_url == doi_url
@@ -37,13 +37,14 @@ def test_extract_paper_from_url_1():
     assert paper.pdf_path.stem == sha256(doi_url.encode()).hexdigest()
     assert paper.pdf_path.read_bytes()[:4] == b"%PDF"
 
+    assert paper.get_text().startswith("enquanto os tutores")
+    assert paper.get_text().endswith("educação brasileira.")
+
 
 def test_extract_acta_from_url():
     acta_url = "https://sol.sbc.org.br/index.php/sbie/issue/view/1743"
-    paper_ls = extract_acta_from_url(Session(), acta_url, max_papers=5)
+    paper_ls = list(extract_acta_from_url(acta_url, max_papers=5))
     
-    assert isinstance(paper_ls, list)
-    assert len(paper_ls) == 5
     assert all(isinstance(paper, Paper) for paper in paper_ls)
     assert [
         "https://doi.org/10.5753/sbie.2026.23539",

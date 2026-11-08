@@ -5,3 +5,4 @@ __pycache__/
 *.pyspy
 requests-cache.sqlite
 downloads/*.pdf
+http_cache.sqlite
