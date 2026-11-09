@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 import lxml.html
 import requests_cache
 import textract
+from platformdirs import user_cache_dir
 from requests import Session
 
 
@@ -21,10 +22,17 @@ class ScraperError(Exception):
 logger = getLogger(__name__)
 
 
-DOWNLOADS_PATH = Path(__file__).parent.parent / "downloads"
-DOWNLOADS_PATH.mkdir(exist_ok=True, parents=True)
+CACHE_DIR = Path(
+    user_cache_dir("TrendTropics", ensure_exists=True)
+)
 
-REQUESTS_CACHE = Path(__file__).parent.parent / 'http_cache.sqlite'
+REQUESTS_CACHE = CACHE_DIR / 'http_cache.sqlite'
+DOWNLOADS_PATH = CACHE_DIR / "downloads"
+
+logger.info(f"Cache directory at '{CACHE_DIR}'.")
+
+REQUESTS_CACHE = CACHE_DIR / 'http_cache.sqlite'
+DOWNLOADS_PATH.mkdir(exist_ok=True, parents=True)
 
 #
 # Se encontrar qualquer seção destas, o documento será truncado.

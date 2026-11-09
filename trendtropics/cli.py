@@ -5,9 +5,6 @@ from textwrap import shorten
 import typer
 from rich.logging import RichHandler
 
-from .scraper import extract_acta_from_url
-from .topics import find_most_frequent_words
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s: %(message)s",
@@ -15,6 +12,10 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+from .scraper import extract_acta_from_url
+from .topics import find_most_frequent_words
 
 
 ACTAS = [
