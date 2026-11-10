@@ -20,6 +20,8 @@ dask_app.layout = [
     ),
     html.H3('Word rank'),
     dcc.RangeSlider(min=1, max=50, value=(1, 10), id='word_rank'),
+    html.H3('Date range'),
+    dcc.RangeSlider(min=2013, max=2026, value=(2020, 2026), id='years_range'),
     dcc.Graph(id='graph-content')
 ]
 
@@ -28,8 +30,9 @@ dask_app.layout = [
     Output('graph-content', 'figure'),
     Input('acta_abbr', 'value'),
     Input(component_id='word_rank', component_property='value'),
+    Input(component_id='years_range', component_property='value'),
 )
-def update_graph(acta_abbr: str, word_rank: list[int]):
+def update_graph(acta_abbr: str, word_rank: list[int], years_range: list[int]):
     # Número de artigos por acta e por ano
     article_counts = (
         WORD_FREQS
@@ -62,6 +65,7 @@ def update_graph(acta_abbr: str, word_rank: list[int]):
         .filter(
             (pl.col("acta_abbr") == acta_abbr)
             & pl.col("word").is_in(top_words)
+            & pl.col("acta_year").is_between(years_range[0], years_range[1])
         )
         .group_by("acta_year", "word")
         .agg(total_freq=pl.col("freq").sum())
