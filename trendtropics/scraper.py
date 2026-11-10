@@ -11,28 +11,16 @@ from urllib.parse import parse_qs, urlparse
 import lxml.html
 import requests_cache
 import textract
-from platformdirs import user_cache_dir
 from requests import Session
 
+from .commons import TrendTropicsException, REQUESTS_CACHE, DOWNLOADS_PATH
 
-class ScraperError(Exception):
+
+class ScraperException(TrendTropicsException):
     pass
 
 
 logger = getLogger(__name__)
-
-
-CACHE_DIR = Path(
-    user_cache_dir("TrendTropics", ensure_exists=True)
-)
-
-REQUESTS_CACHE = CACHE_DIR / 'http_cache.sqlite'
-DOWNLOADS_PATH = CACHE_DIR / "downloads"
-
-logger.info(f"Cache directory at '{CACHE_DIR}'.")
-
-REQUESTS_CACHE = CACHE_DIR / 'http_cache.sqlite'
-DOWNLOADS_PATH.mkdir(exist_ok=True, parents=True)
 
 #
 # Se encontrar qualquer seção destas, o documento será truncado.
@@ -65,6 +53,20 @@ STRIP_LIST = [
     # SBIE 2024
     'XIII Congresso Brasileiro de Informática na Educação (CBIE 2024)',
     'XXXV Simpósio Brasileiro de Informática na Educação (SBIE 2024)',
+    # SBIE 2022
+    'XI Congresso Brasileiro de Informática na Educação (CBIE 2022)',
+    'Anais do XXXIII Simpósio Brasileiro de Informática na Educação (SBIE 2022)',
+    # SBIE 2021
+    'X Congresso Brasileiro de Informática na Educação (CBIE 2021)',
+    'Anais do XXXII Simpósio Brasileiro de Informática na Educação (SBIE 2021)',
+    # SBIE 2020
+    'IX Congresso Brasileiro de Informática na Educação (CBIE 2020)',
+    'Anais do XXXI Simpósio Brasileiro de Informática na Educação (SBIE 2020)',
+    
+    # SBIE 2013
+    'II Congresso Brasileiro de Informática na Educação (CBIE 2013)',
+    'XXIV Simpósio Brasileiro de Informática na Educação (SBIE 2013)',
+
 ]
 
 
@@ -78,16 +80,23 @@ def new_requests_session() -> Session:
             allowable_codes=(200,),
         )
     except Exception as exc:
-        raise ScraperError("Failed to create he requests session object.") from exc
+        raise ScraperException("Failed to create he requests session object.") from exc
+
+
+@dataclass(frozen=True)
+class Acta:
+    abbr: str
+    year: int
+    url: str
 
 
 @dataclass(frozen=True)
 class Paper:
-
     doi_url: str
+    acta: Acta
     title: str
     abstract: str = field(repr=False)
-    pdf_path: Path = field(repr=False)
+    pdf_path: Path = field(repr=False, hash=False, compare=False)
 
     # O lru_cache funciona porque Paper é frozen.
     @lru_cache(1)  # noqa: B019
@@ -113,7 +122,7 @@ class Paper:
                 page = page.replace(replace, "").strip()
             len_after = len(page)
             if len_before == len_after:
-                logger.warning(f"Failed to crop header and footer from PDF file '{str(self.doi_url)}' at page {ix}.")
+                logger.warning(f"Failed to crop header and footer from PDF file '{str(self.doi_url)}' at page {ix+1}.")
 
             # Detecta o início da primeira seção que será truncada, se houver
             truncate_start = None
@@ -137,12 +146,12 @@ class Paper:
             all_pages.append(page)
 
         if not stop:
-            raise ScraperError(f"Failed to detect references from the PDF at '{str(self.doi_url)}'.")
+            raise ScraperException(f"Failed to detect references from '{self.doi_url!s}'.")
 
         return "\n".join(all_pages)
 
 
-def extract_paper_from_url(url: str) -> Paper:
+def extract_paper_from_url(url: str, acta: Acta) -> Paper:
     """
     Download a paper from its URL.
 
@@ -157,7 +166,7 @@ def extract_paper_from_url(url: str) -> Paper:
         html_content = resp.content.decode()
         doc = lxml.html.fromstring(html_content)
     except Exception as exc:
-        raise ScraperError(
+        raise ScraperException(
             f"Failed to download and parse the HTML for the paper at '{url}'."
         ) from exc
 
@@ -169,7 +178,7 @@ def extract_paper_from_url(url: str) -> Paper:
         title: str = doc.xpath('//h1[@class="page_title"]/text()')[0].strip()
         pdf_url: str = doc.xpath('//a[@class="obj_galley_link pdf"]/@href')[0].strip()
     except Exception as exc:
-        raise ScraperError(
+        raise ScraperException(
             f"Failed to extract DOI and abstract from the paper at '{url}'."
         ) from exc
     
@@ -180,7 +189,7 @@ def extract_paper_from_url(url: str) -> Paper:
         pdf_viewer_url = doc.xpath('//iframe/@src')[0].strip()
         pdf_url = parse_qs(urlparse(pdf_viewer_url).query)['file'][0]
     except Exception as exc:
-        raise ScraperError(
+        raise ScraperException(
             f"Failed to extract the PDF URL from the paper at '{url}'."
         ) from exc
     
@@ -192,17 +201,14 @@ def extract_paper_from_url(url: str) -> Paper:
         with open(pdf_path, "wb") as f:
             f.write(resp.content)
     except Exception as exc:
-        raise ScraperError(
+        raise ScraperException(
             f"Failed to download the PDF for the paper at '{url}'."
         ) from exc
 
-    return Paper(doi_url=doi, title=title, abstract=abstract, pdf_path=pdf_path)
+    return Paper(doi_url=doi, acta=acta, title=title, abstract=abstract, pdf_path=pdf_path)
 
 
-def extract_acta_from_url(
-    url: str,
-    max_papers: int | None = None
-) -> Generator[Paper]:
+def extract_acta_from_url(acta: Acta, max_papers: int = 0) -> Generator[Paper]:
     """
     Extract all papers from an acta URL.
 
@@ -213,11 +219,11 @@ def extract_acta_from_url(
     session: Session = new_requests_session()
     
     try:
-        resp = session.get(url)
+        resp = session.get(acta.url)
         html_content = resp.content.decode()
         doc = lxml.html.fromstring(html_content)
     except Exception as exc:
-        raise ScraperError(
+        raise ScraperException(
             f"Failed to download and parse the HTML for the acta at '{url}'."
         ) from exc
     
@@ -240,7 +246,7 @@ def extract_acta_from_url(
                 ix -= 1
                 continue
             try:
-                yield extract_paper_from_url(paper_url)
+                yield extract_paper_from_url(paper_url, acta)
             except Exception as exc:
                 logger.error("Failed to extract paper.", exc_info=exc)
                 continue
@@ -251,6 +257,6 @@ def extract_acta_from_url(
                 break
         
     except Exception as exc:
-        raise ScraperError(
+        raise ScraperException(
             f"Failed to extract paper URLs from the acta at '{url}'."
         ) from exc

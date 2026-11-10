@@ -1,29 +1,72 @@
-from pathlib import Path
+import re
+from collections import Counter
+from dataclasses import dataclass
+from logging import getLogger
 
-from sklearn.feature_extraction.text import CountVectorizer
+from math import log10
+
+from .commons import TrendTropicsException
+from .scraper import Paper
+
+logger = getLogger(__name__)
 
 
-BR_INFOEDUC_STOP_WORDS = (
-    Path(__file__).parent / 'br_infoeduc_stopwords.txt'
-).read_text().splitlines()
+class TopicsException(TrendTropicsException):
+    pass
 
 
-def find_most_frequent_words(
-    docs: list[str],
-    ngram_range: tuple[int, int] = (1, 1)
-) -> list[tuple[str, int]]:
-    vectorizer = CountVectorizer(
-        stop_words=BR_INFOEDUC_STOP_WORDS,
-        ngram_range=ngram_range
-    )
-    X = vectorizer.fit_transform(docs)
+@dataclass
+class WordFreqRecord:
+    paper: Paper
+    word: str
+    freq: float
 
-    frequencies = X.sum(axis=0).A1
-    words: list[str] = vectorizer.get_feature_names_out()
 
-    most_frequent = sorted(
-        zip(words, map(int, frequencies)),
-        key=lambda item: item[1],
-        reverse=True,
-    )
-    return most_frequent
+def extract_word_freq_records(
+    paper_list: list[Paper],
+    include_words: list[str] | None = None,
+    exclude_words: list[str] | None = None,
+) -> list[WordFreqRecord]:
+
+    if include_words and exclude_words:
+        raise TopicsException(
+            "Cannot set include_words and exclude_words at the same time."
+        )
+    
+    topics = []
+    for paper in paper_list:
+        try:
+            words = paper.get_text().split()
+        except Exception as exc:
+            logger.error(f"Failed to extract the PDF '{paper.pdf_path!s}': {exc!s}")
+            continue
+
+        counter = Counter(words).most_common()
+        counter = [
+            (w, f)
+            for w, f in counter
+            if len(w) > 1 and not re.match(r'\d', w)
+        ]
+        if exclude_words:
+            counter = [
+                (w, f)
+                for w, f in counter
+                if w.lower() not in exclude_words
+            ]
+        if include_words:
+            counter = [
+                (w, f)
+                for w, f in counter
+                if w in include_words
+            ]
+        counter = [
+            (w, log10(f) / len(words))
+            for w, f in counter
+        ]
+        for word, freq in counter:
+            topics.append(WordFreqRecord(
+                paper=paper,
+                word=word,
+                freq=freq,
+            ))
+    return topics

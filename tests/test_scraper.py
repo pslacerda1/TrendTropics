@@ -1,13 +1,15 @@
 from hashlib import sha256
-from trendtropics.scraper import Paper, extract_paper_from_url, extract_acta_from_url
+from trendtropics.scraper import Acta, Paper, extract_paper_from_url, extract_acta_from_url
 
 
 def test_extract_paper_from_url_0():
     doi_url = "https://doi.org/10.5753/sbie.2026.28387"
-    paper = extract_paper_from_url(doi_url)
+    paper = extract_paper_from_url(doi_url, Acta('SBIE', 2026, "<Skip>"))
     
     assert isinstance(paper, Paper)
     assert paper.doi_url == doi_url
+    assert paper.acta.abbr == 'SBIE'
+    assert paper.acta.year == 2026
     assert paper.title == "Uma Proposta de Sistema Tutor Inteligente para a Disciplina Cálculo Diferencial"
     
     assert paper.abstract.startswith("Disciplinas de Cálculo Diferencial impõem")
@@ -24,10 +26,12 @@ def test_extract_paper_from_url_0():
 
 def test_extract_paper_from_url_1():
     doi_url = "https://doi.org/10.5753/sbie.2026.26702"
-    paper = extract_paper_from_url(doi_url)
+    paper = extract_paper_from_url(doi_url, Acta('SBIE', 2026, "<Skip>"))
     
     assert isinstance(paper, Paper)
     assert paper.doi_url == doi_url
+    assert paper.acta.abbr == 'SBIE'
+    assert paper.acta.year == 2026
     assert paper.title == "Evolução das atribuições do tutor na Educação a Distância (EaD): uma análise documental e comparativa entre decretos federais com ênfase no Decreto nº 12.456/2025"
     
     assert paper.abstract.startswith("A Educação a Distância (EaD")
@@ -42,14 +46,14 @@ def test_extract_paper_from_url_1():
 
 
 def test_extract_acta_from_url():
-    acta_url = "https://sol.sbc.org.br/index.php/sbie/issue/view/1743"
-    paper_ls = list(extract_acta_from_url(acta_url, max_papers=5))
+    acta = Acta('SBIE', 2026, "https://sol.sbc.org.br/index.php/sbie/issue/view/1743")
+    paper_list = list(extract_acta_from_url(acta, max_papers=5))
     
-    assert all(isinstance(paper, Paper) for paper in paper_ls)
+    assert all(isinstance(paper, Paper) for paper in paper_list)
     assert [
         "https://doi.org/10.5753/sbie.2026.23539",
         "https://doi.org/10.5753/sbie.2026.25540",
         "https://doi.org/10.5753/sbie.2026.26409",
         "https://doi.org/10.5753/sbie.2026.26628",
         "https://doi.org/10.5753/sbie.2026.26702"
-    ] == [paper.doi_url for paper in paper_ls]
+    ] == [paper.doi_url for paper in paper_list]
