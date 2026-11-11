@@ -11,7 +11,7 @@ dask_app = Dash()
 
 
 dask_app.layout = [
-    html.H1(children='TrendTropics', style={'textAlign':'center'}),
+    # html.H1('TrendTropics', style={'textAlign':'center'}),
     html.H3('Acta'),
     dcc.Dropdown(
         WORD_FREQS.get_column('acta_abbr').unique().to_list(),
@@ -19,7 +19,9 @@ dask_app.layout = [
         id='acta_abbr'
     ),
     html.H3('Word rank'),
-    dcc.RangeSlider(min=1, max=50, value=(1, 10), id='word_rank'),
+    dcc.RangeSlider(min=0, max=50, value=(1, 10), id='word_rank'),
+    html.H3('Extra words'),
+    dcc.Input(value='', type='text', id='extra_words'),
     html.H3('Date range'),
     dcc.RangeSlider(min=2013, max=2026, value=(2020, 2026), id='years_range'),
     dcc.Graph(id='graph-content')
@@ -30,9 +32,15 @@ dask_app.layout = [
     Output('graph-content', 'figure'),
     Input('acta_abbr', 'value'),
     Input(component_id='word_rank', component_property='value'),
+    Input(component_id='extra_words', component_property='value'),
     Input(component_id='years_range', component_property='value'),
 )
-def update_graph(acta_abbr: str, word_rank: list[int], years_range: list[int]):
+def update_graph(
+    acta_abbr: str,
+    word_rank: list[int],
+    extra_words: str,
+    years_range: list[int]
+):
     # Número de artigos por ano
     article_counts = (
         WORD_FREQS
@@ -56,7 +64,12 @@ def update_graph(acta_abbr: str, word_rank: list[int], years_range: list[int]):
             pl.col("rank").is_between(word_rank[0], word_rank[1])
         )
         .get_column("word")
+        .to_list()
     )
+    top_words = [
+        *top_words,
+        *[w.strip() for w in extra_words.split(',')],
+    ]
 
     # Média por ano, considerando artigos sem ocorrência como zero
     df = (
