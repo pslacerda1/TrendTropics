@@ -21,11 +21,14 @@ dependencies = [
   "requests-cache>=1.3.3",
   "rich>=15.0.0",
   "textract>=2.1.0",
-  "typer>=0.29.0",
+  "typer>=0.29.1",
 ]
 
 [tool.setuptools]
 packages = ["trendtropics"]
 
 [project.scripts]
-trendtropics = "trendtropics.cli:typer_app"
+trendtropics = "trendtropics.main:typer_app"
+
+[tool.ruff.lint]
+ignore = ["SIM102", "SIM114"]
