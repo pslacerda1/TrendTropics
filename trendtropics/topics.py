@@ -1,6 +1,7 @@
 import re
 from collections import Counter
 from dataclasses import dataclass
+from itertools import pairwise
 from logging import getLogger
 from math import log10
 
@@ -25,6 +26,8 @@ def extract_word_freq_records(
     paper_list: list[Paper],
     include_words: list[str] | None = None,
     exclude_words: list[str] | None = None,
+    extract_unigrams=True,
+    extract_bigrams=True,
 ) -> list[WordFreqRecord]:
 
     if include_words and exclude_words:
@@ -39,8 +42,18 @@ def extract_word_freq_records(
         except Exception as exc:
             logger.error(f"Failed to extract the PDF '{paper.pdf_path!s}': {exc!s}")
             continue
+        
+        tokens: list[str] = []
+        if extract_unigrams:
+            tokens.extend(words)
+        if extract_bigrams:
+            tokens.extend(
+                f"{w1} {w2}"
+                for w1, w2 in
+                pairwise(words)
+            )
 
-        counter = Counter(words).most_common()
+        counter = Counter(tokens).most_common()
         counter = [
             (w, f)
             for w, f in counter
