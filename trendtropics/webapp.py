@@ -20,9 +20,10 @@ dask_app.layout = [
         'SBIE',
         id='acta_abbr'
     ),
-    html.H3('Word rank'),
+    html.H3('Term rank'),
     dcc.RangeSlider(min=0, max=50, value=(1, 10), id='word_rank'),
-    html.H3('Extra words'),
+    html.H3('Extra Terms'),
+    html.P('Separated by comma (,)'),
     dcc.Input(value='', type='text', id='extra_words'),
     html.H3('Date range'),
     dcc.RangeSlider(min=2013, max=2026, value=(2020, 2026), id='years_range'),
@@ -54,10 +55,20 @@ def update_graph(
         ],
         years_range=tuple(years_range),  # ty: ignore[invalid-argument-type]
     )
-    return px.line(
+    fig = px.line(
         topics_df.to_pandas(),
         x="acta_year",
         y="freq",
         color="word",
         markers=True,
+        labels={
+            "acta_year": "Year",
+            "freq": "Mean Paper Frequency",
+            "word": "Term",
+        },
     )
+    fig.update_yaxes(
+        exponentformat="e",
+        showexponent="all",
+    )
+    return fig
