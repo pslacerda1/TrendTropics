@@ -121,8 +121,12 @@ class Paper:
             for replace in STRIP_LIST:
                 page = page.replace(replace, "").strip()
             len_after = len(page)
-            if len_before == len_after:
-                logger.warning(f"Failed to crop header and footer from PDF file '{str(self.doi_url)}' at page {ix+1}.")
+            if len_before == len_after: 
+                if not (self.acta.abbr == 'SBIE' and self.acta.year == 2023):
+                    logger.warning(
+                        f"Failed to crop header and footer from PDF file "
+                        f"'{self.doi_url!s}' at page {ix+1}."
+                    )
 
             # Detecta o início da primeira seção que será truncada, se houver
             truncate_start = None
@@ -224,7 +228,7 @@ def extract_acta_from_url(acta: Acta, max_papers: int = 0) -> Generator[Paper]:
         doc = lxml.html.fromstring(html_content)
     except Exception as exc:
         raise ScraperException(
-            f"Failed to download and parse the HTML for the acta at '{url}'."
+            f"Failed to download and parse the HTML for the acta at '{acta.url}'."
         ) from exc
     
     try:
@@ -258,5 +262,5 @@ def extract_acta_from_url(acta: Acta, max_papers: int = 0) -> Generator[Paper]:
         
     except Exception as exc:
         raise ScraperException(
-            f"Failed to extract paper URLs from the acta at '{url}'."
+            f"Failed to extract paper URLs from the acta at '{acta.url}'."
         ) from exc
