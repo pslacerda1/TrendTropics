@@ -2,7 +2,6 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from logging import getLogger
-
 from math import log10
 
 from .commons import TrendTropicsException

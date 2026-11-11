@@ -33,7 +33,7 @@ dask_app.layout = [
     Input(component_id='years_range', component_property='value'),
 )
 def update_graph(acta_abbr: str, word_rank: list[int], years_range: list[int]):
-    # Número de artigos por acta e por ano
+    # Número de artigos por ano
     article_counts = (
         WORD_FREQS
         .filter(pl.col("acta_abbr") == acta_abbr)
@@ -42,8 +42,7 @@ def update_graph(acta_abbr: str, word_rank: list[int], years_range: list[int]):
         .agg(n_articles=pl.len())
     )
 
-    # Top 10 palavras da acta pela frequência média
-    # Dividir pela quantidade de artigos não altera o ranking.
+    # Ranquear palavras da acta entre a posição 0 e 1 do word_ranking.
     top_words = (
         WORD_FREQS
         .filter(pl.col("acta_abbr") == acta_abbr)
