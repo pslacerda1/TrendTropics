@@ -5,6 +5,8 @@ from itertools import pairwise
 from logging import getLogger
 from math import log10
 
+import polars as pl
+
 from .commons import TrendTropicsException
 from .scraper import Paper
 
@@ -82,3 +84,59 @@ def extract_word_freq_records(
                 freq=freq,
             ))
     return topics
+
+
+def compute_top_topics(
+    word_freqs: pl.DataFrame,
+    acta_abbr: str,
+    word_rank: tuple[int, int],
+    extra_words: list[str],
+    years_range: tuple[int, int],
+) -> pl.DataFrame:
+    # Número de artigos por ano
+    article_counts = (
+        word_freqs
+        .filter(pl.col("acta_abbr") == acta_abbr)
+        .select("paper_doi", "acta_year")
+        .group_by("acta_year")
+        .agg(n_articles=pl.len())
+    )
+
+    # Ranquear palavras da acta entre a posição 0 e 1 do word_ranking.
+    top_words = (
+        word_freqs
+        .filter(pl.col("acta_abbr") == acta_abbr)
+        .group_by("word")
+        .agg(total_freq=pl.col("freq").sum())
+        .sort("total_freq", descending=True)
+        .with_columns(
+            rank=pl.col("total_freq").rank(method="ordinal", descending=True)
+        )
+        .filter(
+            pl.col("rank").is_between(word_rank[0], word_rank[1])
+        )
+        .get_column("word")
+        .to_list()
+    )
+    top_words = [
+        *top_words,
+        *extra_words,
+    ]
+
+    # Média por ano, considerando artigos sem ocorrência como zero
+    top_topics = (
+        word_freqs
+        .filter(
+            (pl.col("acta_abbr") == acta_abbr)
+            & pl.col("word").is_in(top_words)
+            & pl.col("acta_year").is_between(years_range[0], years_range[1])
+        )
+        .group_by("acta_year", "word")
+        .agg(total_freq=pl.col("freq").sum())
+        .join(article_counts, on="acta_year")
+        .with_columns(
+            freq=pl.col("total_freq") / pl.col("n_articles")
+        )
+        .sort("acta_year")
+    )
+    return top_topics

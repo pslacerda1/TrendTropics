@@ -2,6 +2,8 @@ import plotly.express as px
 import polars as pl
 from dash import Dash, Input, Output, callback, dcc, html
 
+from trendtropics.topics import compute_top_topics
+
 from .commons import WORD_FREQS_PARQUET
 
 WORD_FREQS = pl.read_parquet(WORD_FREQS_PARQUET)
@@ -41,55 +43,19 @@ def update_graph(
     extra_words: str,
     years_range: list[int]
 ):
-    # Número de artigos por ano
-    article_counts = (
-        WORD_FREQS
-        .filter(pl.col("acta_abbr") == acta_abbr)
-        .select("paper_doi", "acta_year")
-        .group_by("acta_year")
-        .agg(n_articles=pl.len())
+    topics_df = compute_top_topics(
+        WORD_FREQS,
+        acta_abbr, 
+        word_rank=tuple(word_rank),  # ty: ignore[invalid-argument-type]
+        extra_words=[
+            w.strip()
+            for w in
+            extra_words.split(',')
+        ],
+        years_range=tuple(years_range),  # ty: ignore[invalid-argument-type]
     )
-
-    # Ranquear palavras da acta entre a posição 0 e 1 do word_ranking.
-    top_words = (
-        WORD_FREQS
-        .filter(pl.col("acta_abbr") == acta_abbr)
-        .group_by("word")
-        .agg(total_freq=pl.col("freq").sum())
-        .sort("total_freq", descending=True)
-        .with_columns(
-            rank=pl.col("total_freq").rank(method="ordinal", descending=True)
-        )
-        .filter(
-            pl.col("rank").is_between(word_rank[0], word_rank[1])
-        )
-        .get_column("word")
-        .to_list()
-    )
-    top_words = [
-        *top_words,
-        *[w.strip() for w in extra_words.split(',')],
-    ]
-
-    # Média por ano, considerando artigos sem ocorrência como zero
-    df = (
-        WORD_FREQS
-        .filter(
-            (pl.col("acta_abbr") == acta_abbr)
-            & pl.col("word").is_in(top_words)
-            & pl.col("acta_year").is_between(years_range[0], years_range[1])
-        )
-        .group_by("acta_year", "word")
-        .agg(total_freq=pl.col("freq").sum())
-        .join(article_counts, on="acta_year")
-        .with_columns(
-            freq=pl.col("total_freq") / pl.col("n_articles")
-        )
-        .sort("acta_year")
-    )
-
     return px.line(
-        df.to_pandas(),
+        topics_df.to_pandas(),
         x="acta_year",
         y="freq",
         color="word",
